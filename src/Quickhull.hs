@@ -122,7 +122,7 @@ shiftHeadFlagsL :: Acc (Vector Bool) -> Acc (Vector Bool)
 shiftHeadFlagsL vec' = permute const (fill (shape vec') True_) (\(I1 i) -> Just_ (I1 (i-1))) vec'
 
 shiftHeadFlagsR :: Acc (Vector Bool) -> Acc (Vector Bool)
-shiftHeadFlagsR = error "TODO: shiftHeadFlagsR"
+shiftHeadFlagsR vec' = permute const (fill (shape vec') True_) (\(I1 i) -> Just_ (I1 (i+1))) vec'
 
 segmentedScanl1 :: Elt a => (Exp a -> Exp a -> Exp a) -> Acc (Vector Bool) -> Acc (Vector a) -> Acc (Vector a)
 segmentedScanl1 = error "TODO: segmentedScanl1"
