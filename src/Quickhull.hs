@@ -125,7 +125,9 @@ shiftHeadFlagsR :: Acc (Vector Bool) -> Acc (Vector Bool)
 shiftHeadFlagsR vec' = permute const (fill (shape vec') True_) (\(I1 i) -> Just_ (I1 (i+1))) vec'
 
 segmentedScanl1 :: Elt a => (Exp a -> Exp a -> Exp a) -> Acc (Vector Bool) -> Acc (Vector a) -> Acc (Vector a)
-segmentedScanl1 = error "TODO: segmentedScanl1"
+segmentedScanl1 f flags' vec' =  map snd
+                                  . scanl1 (segmented f)
+                                  $ zip (replicate (lift (indexTail (shape vec') :. All)) flags') vec'
 
 segmentedScanr1 :: Elt a => (Exp a -> Exp a -> Exp a) -> Acc (Vector Bool) -> Acc (Vector a) -> Acc (Vector a)
 segmentedScanr1 = error "TODO: segmentedScanr1"
