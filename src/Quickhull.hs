@@ -57,35 +57,57 @@ type SegmentedPoints = (Vector Bool, Vector Point)
 initialPartition :: Acc (Vector Point) -> Acc SegmentedPoints
 initialPartition points =
   let
+      -- Get the left-bottom-most and right-top-most points by getting the minimum and maximum point respectively
+      -- (the bottom left point should always have a lower x coordinate, and optionally a lower y coordinate)
       p1, p2 :: Exp Point
-      p1 = the $ fold1All getLeftMostPoint points
-      p2 = the $ fold1All getRightMostPoint points
+      p1 = the $ minimum points
+      p2 = the $ maximum points
       line = T2 p1 p2
 
+      -- Create an array of bools that has True for all points "above" (left of) the line
       isUpper :: Acc (Vector Bool)
       isUpper = map (pointIsLeftOfLine line) points
 
+      -- Create an array of bools that has True for all points "below" (right of) the line
       isLower :: Acc (Vector Bool)
       isLower = map (pointIsRightOfLine line) points
 
+      -- Generate an index array: every value is its own index number
       indices = generate (shape points) (\(I1 i) -> i)
 
+      -- Get the indices of the points above the line
       offsetUpper :: Acc (Vector Int)
       countUpper  :: Acc (Scalar Int)
       T2 offsetUpper countUpper = compact isUpper indices
 
+      -- Get the indices of the points below the line
       offsetLower :: Acc (Vector Int)
       countLower  :: Acc (Scalar Int)
       T2 offsetLower countLower = compact isLower indices
 
-      destination :: Acc (Vector (Maybe DIM1))
-      destination = error "TODO: compute the index in the result array for each point (if it is present)"
+      -- Create a set of target indices for both the points above and below the line
+      upperIndices = generate (I1 (the countUpper)) (\(I1 i) -> Just_ (I1 (i + 1)))
+      lowerIndices = generate (I1 (the countLower)) (\(I1 i) -> Just_ (I1 (i + 2 + the countUpper)))
 
+      -- Assign destinations to all points above the line, leaving empty the spots between them
+      preDestination :: Acc (Vector (Maybe DIM1))
+      preDestination = scatter offsetUpper (fill (shape points) Nothing_) (upperIndices)
+
+      -- Assign destinations to all points below the line as well.
+      -- Any point not below or above keeps a Nothing for its destination, and will thus not be kept.
+      destination :: Acc (Vector (Maybe DIM1))
+      destination = scatter offsetLower preDestination (lowerIndices)
+
+      p2Pos = the countUpper + 1
+      finalLength = 3 + the countUpper + the countLower
+      justTheLine = generate (I1 finalLength) (\(I1 i) -> if i==0 || i == finalLength-1 then p1 else if i == p2Pos then p2 else T2 0 0)
+
+      -- Put the old points in their new destination spot
       newPoints :: Acc (Vector Point)
-      newPoints = error "TODO: place each point into its corresponding segment of the result"
+      newPoints = permute const justTheLine (\ix -> destination!ix) points
 
       headFlags :: Acc (Vector Bool)
-      headFlags = error "TODO: create head flags array demarcating the initial segments"
+      headFlags = generate (I1 finalLength) (\(I1 i) -> if i==0 || i==p2Pos || i == finalLength-1 then True_ else False_)
   in
   T2 headFlags newPoints
 
@@ -141,12 +163,6 @@ segmentedScanr1 f flags' vec' =  map snd
 
 -- Given utility functions
 -- -----------------------
-
-getLeftMostPoint :: Exp Point -> Exp Point -> Exp Point
-getLeftMostPoint a@(T2 xa _) b@(T2 xb _) = if xa < xb then a else b
-
-getRightMostPoint :: Exp Point -> Exp Point -> Exp Point
-getRightMostPoint a@(T2 xa _) b@(T2 xb _) = if xa > xb then a else b
 
 pointIsLeftOfLine :: Exp Line -> Exp Point -> Exp Bool
 pointIsLeftOfLine (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = nx * x + ny * y > c
