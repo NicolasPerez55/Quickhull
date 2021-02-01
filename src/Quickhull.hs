@@ -27,6 +27,14 @@ import qualified Prelude                      as P
 type Point = (Int, Int)
 type Line  = (Point, Point)
 
+instance Eq Point where
+  (a,b) == (c,d) = a == c && b == d
+  (a,b) /= (c,d) = a /= c || b /= d
+
+--A <= B if A is left of B
+instance Ord Point where
+  (a,b) <= (c,d) = a <= c
+
 -- This algorithm will use a head-flags array to distinguish the different
 -- sections of the hull (the two arrays are always the same length).
 --
@@ -58,22 +66,24 @@ initialPartition :: Acc (Vector Point) -> Acc SegmentedPoints
 initialPartition points =
   let
       p1, p2 :: Exp Point
-      p1 = error "TODO: locate the left-most point"
-      p2 = error "TODO: locate the right-most point"
+      p1 = minimum points
+      p2 = maximum points
 
       isUpper :: Acc (Vector Bool)
-      isUpper = error "TODO: determine which points lie above the line (p₁, p₂)"
+      isUpper = map pointIsAboveLine points
 
       isLower :: Acc (Vector Bool)
-      isLower = error "TODO: determine which points lie below the line (p₁, p₂)"
+      isLower = map pointIsBelowLine points
+
+      indices = fromList (shape points) [1..] :: Vector int
 
       offsetUpper :: Acc (Vector Int)
       countUpper  :: Acc (Scalar Int)
-      T2 offsetUpper countUpper = error "TODO: number of points above the line and their relative index"
+      T2 offsetUpper countUpper = compact isUpper indices
 
       offsetLower :: Acc (Vector Int)
       countLower  :: Acc (Scalar Int)
-      T2 offsetLower countLower = error "TODO: number of points below the line and their relative index"
+      T2 offsetLower countLower = compact isLower indices
 
       destination :: Acc (Vector (Maybe DIM1))
       destination = error "TODO: compute the index in the result array for each point (if it is present)"
@@ -145,6 +155,21 @@ pointIsLeftOfLine (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = nx * x + ny * y > c
     nx = y1 - y2
     ny = x2 - x1
     c  = nx * x1 + ny * y1
+
+pointIsAboveLine :: Exp Line -> Exp Point -> Exp Bool
+pointIsAboveLine (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = y > (c - (nx * x)) / ny
+  where
+    nx = y1 - y2
+    ny = x2 - x1
+    c  = nx * x1 + ny * y1
+
+pointIsBelowLine :: Exp Line -> Exp Point -> Exp Bool
+pointIsBelowLine (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = y < (c - (nx * x)) / ny
+  where
+    nx = y1 - y2
+    ny = x2 - x1
+    c  = nx * x1 + ny * y1
+
 
 nonNormalizedDistance :: Exp Line -> Exp Point -> Exp Int
 nonNormalizedDistance (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = nx * x + ny * y - c
