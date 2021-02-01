@@ -27,14 +27,6 @@ import qualified Prelude                      as P
 type Point = (Int, Int)
 type Line  = (Point, Point)
 
-instance Eq Point where
-  (a,b) == (c,d) = a == c && b == d
-  (a,b) /= (c,d) = a /= c || b /= d
-
---A <= B if A is left of B
-instance Ord Point where
-  (a,b) <= (c,d) = a <= c
-
 -- This algorithm will use a head-flags array to distinguish the different
 -- sections of the hull (the two arrays are always the same length).
 --
@@ -66,16 +58,17 @@ initialPartition :: Acc (Vector Point) -> Acc SegmentedPoints
 initialPartition points =
   let
       p1, p2 :: Exp Point
-      p1 = minimum points
-      p2 = maximum points
+      p1 = the $ fold1All getLeftMostPoint points
+      p2 = the $ fold1All getRightMostPoint points
+      line = T2 p1 p2
 
       isUpper :: Acc (Vector Bool)
-      isUpper = map pointIsAboveLine points
+      isUpper = map (pointIsLeftOfLine line) points
 
       isLower :: Acc (Vector Bool)
-      isLower = map pointIsBelowLine points
+      isLower = map (pointIsRightOfLine line) points
 
-      indices = fromList (shape points) [1..] :: Vector int
+      indices = generate (shape points) (\(I1 i) -> i)
 
       offsetUpper :: Acc (Vector Int)
       countUpper  :: Acc (Scalar Int)
@@ -149,6 +142,12 @@ segmentedScanr1 f flags' vec' =  map snd
 -- Given utility functions
 -- -----------------------
 
+getLeftMostPoint :: Exp Point -> Exp Point -> Exp Point
+getLeftMostPoint a@(T2 xa _) b@(T2 xb _) = if xa < xb then a else b
+
+getRightMostPoint :: Exp Point -> Exp Point -> Exp Point
+getRightMostPoint a@(T2 xa _) b@(T2 xb _) = if xa > xb then a else b
+
 pointIsLeftOfLine :: Exp Line -> Exp Point -> Exp Bool
 pointIsLeftOfLine (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = nx * x + ny * y > c
   where
@@ -156,6 +155,14 @@ pointIsLeftOfLine (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = nx * x + ny * y > c
     ny = x2 - x1
     c  = nx * x1 + ny * y1
 
+pointIsRightOfLine :: Exp Line -> Exp Point -> Exp Bool
+pointIsRightOfLine (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = nx * x + ny * y < c
+  where
+    nx = y1 - y2
+    ny = x2 - x1
+    c  = nx * x1 + ny * y1
+
+{-
 pointIsAboveLine :: Exp Line -> Exp Point -> Exp Bool
 pointIsAboveLine (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = y > (c - (nx * x)) / ny
   where
@@ -169,7 +176,7 @@ pointIsBelowLine (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = y < (c - (nx * x)) / ny
     nx = y1 - y2
     ny = x2 - x1
     c  = nx * x1 + ny * y1
-
+-}
 
 nonNormalizedDistance :: Exp Line -> Exp Point -> Exp Int
 nonNormalizedDistance (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = nx * x + ny * y - c
