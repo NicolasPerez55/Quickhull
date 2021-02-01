@@ -130,7 +130,9 @@ segmentedScanl1 f flags' vec' =  map snd
                                   $ zip (replicate (lift (indexTail (shape vec') :. All)) flags') vec'
 
 segmentedScanr1 :: Elt a => (Exp a -> Exp a -> Exp a) -> Acc (Vector Bool) -> Acc (Vector a) -> Acc (Vector a)
-segmentedScanr1 = error "TODO: segmentedScanr1"
+segmentedScanr1 f flags' vec' =  map snd
+                                  . scanr1 (segmented f)
+                                  $ zip (replicate (lift (indexTail (shape vec') :. All)) flags') vec'
 
 
 -- Given utility functions
