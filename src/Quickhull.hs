@@ -113,10 +113,10 @@ quickhull =
 -- ----------------
 
 propagateL :: Elt a => Acc (Vector Bool) -> Acc (Vector a) -> Acc (Vector a)
-propagateL = error "TODO: propagateL"
+propagateL = segmentedScanl1 const
 
 propagateR :: Elt a => Acc (Vector Bool) -> Acc (Vector a) -> Acc (Vector a)
-propagateR = error "TODO: propagateR"
+propagateR = segmentedScanr1 (P.flip const)
 
 shiftHeadFlagsL :: Acc (Vector Bool) -> Acc (Vector Bool)
 shiftHeadFlagsL vec' = permute const (fill (shape vec') True_) (\(I1 i) -> Just_ (I1 (i-1))) vec'
