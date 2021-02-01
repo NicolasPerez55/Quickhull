@@ -124,6 +124,7 @@ shiftHeadFlagsL vec' = permute const (fill (shape vec') True_) (\(I1 i) -> Just_
 shiftHeadFlagsR :: Acc (Vector Bool) -> Acc (Vector Bool)
 shiftHeadFlagsR vec' = permute const (fill (shape vec') True_) (\(I1 i) -> Just_ (I1 (i+1))) vec'
 
+-- Code for segmentedScanl1 and segmentedScanr1 adapted from the accelerate library functions scanl1Seg and scanr1Seg
 segmentedScanl1 :: Elt a => (Exp a -> Exp a -> Exp a) -> Acc (Vector Bool) -> Acc (Vector a) -> Acc (Vector a)
 segmentedScanl1 f flags' vec' =  map snd
                                   . scanl1 (segmented f)
@@ -131,7 +132,7 @@ segmentedScanl1 f flags' vec' =  map snd
 
 segmentedScanr1 :: Elt a => (Exp a -> Exp a -> Exp a) -> Acc (Vector Bool) -> Acc (Vector a) -> Acc (Vector a)
 segmentedScanr1 f flags' vec' =  map snd
-                                  . scanr1 (segmented f)
+                                  . scanr1 (\x y -> segmented (P.flip f) y x)
                                   $ zip (replicate (lift (indexTail (shape vec') :. All)) flags') vec'
 
 
