@@ -164,13 +164,34 @@ partitionTesting (T2 oldHeadFlags oldPoints) = let
     isRightOfTriangle :: Acc (Vector Bool)
     isRightOfTriangle = zipWith3 (\pt p3 p2 -> pointIsLeftOfLine (T2 p3 p2) pt) oldPoints p3s p2s
 
+    -- Find the indices where every segment starts, and what spot everything is in their segment
+    indicesSegments = propagateL oldHeadFlags $ generate (shape oldPoints) (\(I1 i) -> i) :: Acc (Vector Int)
+    indicesSegmented = segmentedScanl1 (+) oldHeadFlags (fill (shape oldPoints) 1) :: Acc (Vector Int)
+    indices = zipWith T2 indicesSegments indicesSegmented
 
-  in T2 isLeftOfTriangle isRightOfTriangle
+    -- Get the indices of the points left of the triangles
+    offsetLeft :: Acc (Vector (Int, Int))
+    countLeftTotal  :: Acc (Scalar Int)
+    T2 offsetLeft countLeftTotal = compact isLeftOfTriangle indices
+
+    -- Get the indices of the points below the line
+    offsetRight :: Acc (Vector (Int, Int))
+    countRightTotal  :: Acc (Scalar Int)
+    T2 offsetRight countRightTotal = compact isRightOfTriangle indices
+
+    countLeft = propagateR (shiftHeadFlagsL oldHeadFlags) $ segmentedScanl1 (+) oldHeadFlags (boolsToInts isLeftOfTriangle)
+    countRight = propagateR (shiftHeadFlagsL oldHeadFlags) $ segmentedScanl1 (+) oldHeadFlags (boolsToInts isRightOfTriangle)
+
+    
+
+  in countRight
+
+boolsToInts :: Acc (Vector Bool) -> Acc (Vector Int)
+boolsToInts = map (\bool -> if bool then 1 else 0)
 
 -- The completed algorithm repeatedly partitions the points until there are
 -- no undecided points remaining. What remains is the convex hull.
 --
-
 -- Start with initialPartition.
 -- As long as there is at least one False value in our headflags array, keep applying partition to reduce.
 -- Once finished, take the second part of the SegmentedPoints (the points themselves).
@@ -217,11 +238,7 @@ pointIsLeftOfLine (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = nx * x + ny * y > c
     c  = nx * x1 + ny * y1
 
 pointIsRightOfLine :: Exp Line -> Exp Point -> Exp Bool
-pointIsRightOfLine (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = nx * x + ny * y < c
-  where
-    nx = y1 - y2
-    ny = x2 - x1
-    c  = nx * x1 + ny * y1
+pointIsRightOfLine (T2 a b) c = pointIsLeftOfLine (T2 b a) c
 
 nonNormalizedDistance :: Exp Line -> Exp Point -> Exp Int
 nonNormalizedDistance (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = nx * x + ny * y - c
