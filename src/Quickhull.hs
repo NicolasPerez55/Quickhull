@@ -108,6 +108,8 @@ initialPartition points =
 
       headFlags :: Acc (Vector Bool)
       headFlags = generate (I1 finalLength) (\(I1 i) -> if i==0 || i==p2Pos || i == finalLength-1 then True_ else False_)
+
+
   in
   T2 headFlags newPoints
 
@@ -123,35 +125,58 @@ initialPartition points =
 --
 partition :: Acc SegmentedPoints -> Acc SegmentedPoints
 partition (T2 oldHeadFlags oldPoints) = let
-    -- Zip every point with the p1-p2 line it needs to be compared to
-    p1s = propagateR oldHeadFlags oldPoints
-    p2s = propagateL oldHeadFlags oldPoints
-    pointsLines = zipWith3 (\pt p1 p2 -> T2 pt (T2 p1 p2)) oldPoints p1s p2s :: Acc (Vector (Point,Line))
     -- Calculate the distance for every point from its line
-    distances = map (\(T2 pt line) -> nonNormalizedDistance line pt) pointsLines
+    p1s = propagateL oldHeadFlags oldPoints
+    p2s = propagateR oldHeadFlags oldPoints
+    distances = zipWith3 (\pt p1 p2 -> nonNormalizedDistance (T2 p1 p2) pt) oldPoints p1s p2s
     pointsDistances = zipWith T2 oldPoints distances
-    -- Find p3 by finding the point with the highest (absolute) distance and propagate it along the entire segment
-    p3Step1 = map fst $ segmentedScanl1 (\pA@(T2 _ distA) pB@(T2 _ distB) -> if abs distB > abs distA then pB else pA) oldHeadFlags pointsDistances
+
+    -- Find p3 by finding the point with the highest distance and propagate it along the entire segment
+    p3Step1 = map fst $ segmentedScanl1 (\pA@(T2 _ distA) pB@(T2 _ distB) -> if distB > distA then pB else pA) oldHeadFlags pointsDistances
     p3s = propagateR (shiftHeadFlagsL oldHeadFlags) p3Step1
-    
+
+    -- Find which points are left of p1-p3
+    isLeftOfTriangle :: Acc (Vector Bool)
+    isLeftOfTriangle = zipWith3 (\pt p1 p3 -> pointIsLeftOfLine (T2 p1 p3) pt) oldPoints p1s p3s
+
+    -- Find which points are right of p3-p2
+    isRightOfTriangle :: Acc (Vector Bool)
+    isRightOfTriangle = zipWith3 (\pt p3 p2 -> pointIsLeftOfLine (T2 p3 p2) pt) oldPoints p3s p2s
   in
   T2 oldHeadFlags oldPoints
 
 partitionTesting (T2 oldHeadFlags oldPoints) = let
-    p1s = propagateR oldHeadFlags oldPoints
-    p2s = propagateL oldHeadFlags oldPoints
-    pointsLines = zipWith3 (\pt p1 p2 -> T2 pt (T2 p1 p2)) oldPoints p1s p2s :: Acc (Vector (Point,Line))
-    distances = map (\(T2 pt line) -> nonNormalizedDistance line pt) pointsLines
+    -- Calculate the distance for every point from its line
+    p1s = propagateL oldHeadFlags oldPoints
+    p2s = propagateR oldHeadFlags oldPoints
+    distances = zipWith3 (\pt p1 p2 -> nonNormalizedDistance (T2 p1 p2) pt) oldPoints p1s p2s
     pointsDistances = zipWith T2 oldPoints distances
-    p3Step1 = map fst $ segmentedScanl1 (\pA@(T2 _ distA) pB@(T2 _ distB) -> if abs distB > abs distA then pB else pA) oldHeadFlags pointsDistances
+
+    -- Find p3 by finding the point with the highest distance and propagate it along the entire segment
+    p3Step1 = map fst $ segmentedScanl1 (\pA@(T2 _ distA) pB@(T2 _ distB) -> if distB > distA then pB else pA) oldHeadFlags pointsDistances
     p3s = propagateR (shiftHeadFlagsL oldHeadFlags) p3Step1
-  in p3s
+
+    -- Find which points are left of p1-p3
+    isLeftOfTriangle :: Acc (Vector Bool)
+    isLeftOfTriangle = zipWith3 (\pt p1 p3 -> pointIsLeftOfLine (T2 p1 p3) pt) oldPoints p1s p3s
+
+    -- Find which points are right of p3-p2
+    isRightOfTriangle :: Acc (Vector Bool)
+    isRightOfTriangle = zipWith3 (\pt p3 p2 -> pointIsLeftOfLine (T2 p3 p2) pt) oldPoints p3s p2s
+
+
+  in T2 isLeftOfTriangle isRightOfTriangle
 
 -- The completed algorithm repeatedly partitions the points until there are
 -- no undecided points remaining. What remains is the convex hull.
 --
+
+-- Start with initialPartition.
+-- As long as there is at least one False value in our headflags array, keep applying partition to reduce.
+-- Once finished, take the second part of the SegmentedPoints (the points themselves).
+-- Now take everything but the last point (the duplicate of p1, and we have our hull.
 quickhull :: Acc (Vector Point) -> Acc (Vector Point)
-quickhull pts = init $ asnd $ awhile (\(T2 f p) -> map not (fold1 (&&) f)) partition (initialPartition pts)
+quickhull = init . asnd . (awhile (map not . fold1 (&&) . afst) partition) . initialPartition
 
 
 -- Helper functions
@@ -197,22 +222,6 @@ pointIsRightOfLine (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = nx * x + ny * y < c
     nx = y1 - y2
     ny = x2 - x1
     c  = nx * x1 + ny * y1
-
-{-
-pointIsAboveLine :: Exp Line -> Exp Point -> Exp Bool
-pointIsAboveLine (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = y > (c - (nx * x)) / ny
-  where
-    nx = y1 - y2
-    ny = x2 - x1
-    c  = nx * x1 + ny * y1
-
-pointIsBelowLine :: Exp Line -> Exp Point -> Exp Bool
-pointIsBelowLine (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = y < (c - (nx * x)) / ny
-  where
-    nx = y1 - y2
-    ny = x2 - x1
-    c  = nx * x1 + ny * y1
--}
 
 nonNormalizedDistance :: Exp Line -> Exp Point -> Exp Int
 nonNormalizedDistance (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = nx * x + ny * y - c
