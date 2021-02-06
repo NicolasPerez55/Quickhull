@@ -122,16 +122,14 @@ initialPartition points =
 -- These points are undecided.
 --
 partition :: Acc SegmentedPoints -> Acc SegmentedPoints
-partition (T2 headFlags points) =
-  error "TODO: partition"
+partition = atrace "help I dont exist yet"
 
 
 -- The completed algorithm repeatedly partitions the points until there are
 -- no undecided points remaining. What remains is the convex hull.
 --
 quickhull :: Acc (Vector Point) -> Acc (Vector Point)
-quickhull =
-  error "TODO: quickhull"
+quickhull pts = init $ asnd $ awhile (\(T2 f p) -> map not (fold1 (&&) f)) partition (initialPartition pts)
 
 
 -- Helper functions
