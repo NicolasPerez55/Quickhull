@@ -122,8 +122,30 @@ initialPartition points =
 -- These points are undecided.
 --
 partition :: Acc SegmentedPoints -> Acc SegmentedPoints
-partition = atrace "help I dont exist yet"
+partition (T2 oldHeadFlags oldPoints) = let
+    -- Zip every point with the p1-p2 line it needs to be compared to
+    p1s = propagateR oldHeadFlags oldPoints
+    p2s = propagateL oldHeadFlags oldPoints
+    pointsLines = zipWith3 (\pt p1 p2 -> T2 pt (T2 p1 p2)) oldPoints p1s p2s :: Acc (Vector (Point,Line))
+    -- Calculate the distance for every point from its line
+    distances = map (\(T2 pt line) -> nonNormalizedDistance line pt) pointsLines
+    pointsDistances = zipWith T2 oldPoints distances
+    -- Find p3 by finding the point with the highest (absolute) distance and propagate it along the entire segment
+    p3Step1 = map fst $ segmentedScanl1 (\pA@(T2 _ distA) pB@(T2 _ distB) -> if abs distB > abs distA then pB else pA) oldHeadFlags pointsDistances
+    p3s = propagateR (shiftHeadFlagsL oldHeadFlags) p3Step1
+    
+  in
+  T2 oldHeadFlags oldPoints
 
+partitionTesting (T2 oldHeadFlags oldPoints) = let
+    p1s = propagateR oldHeadFlags oldPoints
+    p2s = propagateL oldHeadFlags oldPoints
+    pointsLines = zipWith3 (\pt p1 p2 -> T2 pt (T2 p1 p2)) oldPoints p1s p2s :: Acc (Vector (Point,Line))
+    distances = map (\(T2 pt line) -> nonNormalizedDistance line pt) pointsLines
+    pointsDistances = zipWith T2 oldPoints distances
+    p3Step1 = map fst $ segmentedScanl1 (\pA@(T2 _ distA) pB@(T2 _ distB) -> if abs distB > abs distA then pB else pA) oldHeadFlags pointsDistances
+    p3s = propagateR (shiftHeadFlagsL oldHeadFlags) p3Step1
+  in p3s
 
 -- The completed algorithm repeatedly partitions the points until there are
 -- no undecided points remaining. What remains is the convex hull.
