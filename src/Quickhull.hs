@@ -73,6 +73,7 @@ initialPartition points =
       isLower = map (pointIsRightOfLine line) points
 
       -- Generate an index array: every value is its own index number
+      indices :: Acc (Vector Int)
       indices = generate (shape points) (\(I1 i) -> i)
 
       -- Get the indices of the points above the line
@@ -86,6 +87,7 @@ initialPartition points =
       T2 offsetLower countLower = compact isLower indices
 
       -- Create a set of target indices for both the points above and below the line
+      upperIndices, lowerIndices :: Acc (Vector Int)
       upperIndices = generate (I1 (the countUpper)) (\(I1 i) -> Just_ (I1 (i + 1)))
       lowerIndices = generate (I1 (the countLower)) (\(I1 i) -> Just_ (I1 (i + 2 + the countUpper)))
 
@@ -126,65 +128,47 @@ initialPartition points =
 partition :: Acc SegmentedPoints -> Acc SegmentedPoints
 partition (T2 oldHeadFlags oldPoints) = let
     -- Calculate the distance for every point from its line
+    p1s, p2s        :: Acc (Vector Point)
+    distances       :: Acc (Vector Int)
+    pointsDistances :: Acc (Vector (Point, Int))
     p1s = propagateL oldHeadFlags oldPoints
     p2s = propagateR oldHeadFlags oldPoints
     distances = zipWith3 (\pt p1 p2 -> nonNormalizedDistance (T2 p1 p2) pt) oldPoints p1s p2s
     pointsDistances = zipWith T2 oldPoints distances
 
     -- Find p3 by finding the point with the highest distance and propagate it along the entire segment
+    p3Step1, p3s :: Acc (Vector Point)
     p3Step1 = map fst $ segmentedScanl1 (\pA@(T2 _ distA) pB@(T2 _ distB) -> if distB > distA then pB else pA) oldHeadFlags pointsDistances
     p3s = propagateR (shiftHeadFlagsL oldHeadFlags) p3Step1
 
-    -- Find which points are left of p1-p3
-    isLeftOfTriangle :: Acc (Vector Bool)
+    -- Find which points are left of p1-p3 and which are right of p3-p2
+    isLeftOfTriangle, isRightOfTriangle :: Acc (Vector Bool)
     isLeftOfTriangle = zipWith3 (\pt p1 p3 -> pointIsLeftOfLine (T2 p1 p3) pt) oldPoints p1s p3s
-
-    -- Find which points are right of p3-p2
-    isRightOfTriangle :: Acc (Vector Bool)
-    isRightOfTriangle = zipWith3 (\pt p3 p2 -> pointIsLeftOfLine (T2 p3 p2) pt) oldPoints p3s p2s
-  in
-  T2 oldHeadFlags oldPoints
-
-partitionTesting (T2 oldHeadFlags oldPoints) = let
-    -- Calculate the distance for every point from its line
-    p1s = propagateL oldHeadFlags oldPoints
-    p2s = propagateR oldHeadFlags oldPoints
-    distances = zipWith3 (\pt p1 p2 -> nonNormalizedDistance (T2 p1 p2) pt) oldPoints p1s p2s
-    pointsDistances = zipWith T2 oldPoints distances
-
-    -- Find p3 by finding the point with the highest distance and propagate it along the entire segment
-    p3Step1 = map fst $ segmentedScanl1 (\pA@(T2 _ distA) pB@(T2 _ distB) -> if distB > distA then pB else pA) oldHeadFlags pointsDistances
-    p3s = propagateR (shiftHeadFlagsL oldHeadFlags) p3Step1
-
-    -- Find which points are left of p1-p3
-    isLeftOfTriangle :: Acc (Vector Bool)
-    isLeftOfTriangle = zipWith3 (\pt p1 p3 -> pointIsLeftOfLine (T2 p1 p3) pt) oldPoints p1s p3s
-
-    -- Find which points are right of p3-p2
-    isRightOfTriangle :: Acc (Vector Bool)
     isRightOfTriangle = zipWith3 (\pt p3 p2 -> pointIsLeftOfLine (T2 p3 p2) pt) oldPoints p3s p2s
 
     -- Find the indices where every segment starts, and what spot everything is in their segment
-    indicesSegments = propagateL oldHeadFlags $ generate (shape oldPoints) (\(I1 i) -> i) :: Acc (Vector Int)
-    indicesSegmented = segmentedScanl1 (+) oldHeadFlags (fill (shape oldPoints) 1) :: Acc (Vector Int)
+    indicesSegments, indicesSegmented :: Acc (Vector Int)
+    indices                           :: Acc (Vector (Int, Int))
+    indicesSegments = propagateL oldHeadFlags $ generate (shape oldPoints) (\(I1 i) -> i)
+    indicesSegmented = segmentedScanl1 (+) oldHeadFlags (fill (shape oldPoints) 1)
     indices = zipWith T2 indicesSegments indicesSegmented
 
     -- Get the indices of the points left of the triangles
-    offsetLeft :: Acc (Vector (Int, Int))
-    countLeftTotal  :: Acc (Scalar Int)
+    offsetLeft     :: Acc (Vector (Int, Int))
+    countLeftTotal :: Acc (Scalar Int)
     T2 offsetLeft countLeftTotal = compact isLeftOfTriangle indices
 
     -- Get the indices of the points below the line
-    offsetRight :: Acc (Vector (Int, Int))
-    countRightTotal  :: Acc (Scalar Int)
+    offsetRight     :: Acc (Vector (Int, Int))
+    countRightTotal :: Acc (Scalar Int)
     T2 offsetRight countRightTotal = compact isRightOfTriangle indices
 
+    -- Get the count of items to the left or right of their triangle per segment
+    countLeft, countRight :: Acc (Vector Int)
     countLeft = propagateR (shiftHeadFlagsL oldHeadFlags) $ segmentedScanl1 (+) oldHeadFlags (boolsToInts isLeftOfTriangle)
     countRight = propagateR (shiftHeadFlagsL oldHeadFlags) $ segmentedScanl1 (+) oldHeadFlags (boolsToInts isRightOfTriangle)
-
-    
-
-  in countRight
+  in
+  T2 oldHeadFlags oldPoints
 
 boolsToInts :: Acc (Vector Bool) -> Acc (Vector Int)
 boolsToInts = map (\bool -> if bool then 1 else 0)
